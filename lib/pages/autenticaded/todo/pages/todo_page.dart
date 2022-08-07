@@ -1,23 +1,171 @@
 import 'package:flutter/material.dart';
 import 'package:todo/pages/autenticaded/todo/widgets/todo_list_item.dart';
+import '../../../../models/todo.dart';
+import 'package:flutter/services.dart';
 
-class Todo extends StatefulWidget {
-  const Todo({Key? key}) : super(key: key);
+class TodoPage extends StatefulWidget {
+  const TodoPage({Key? key}) : super(key: key);
 
   @override
-  State<Todo> createState() => _TodoState();
+  State<TodoPage> createState() => _TodoState();
 }
 
-class _TodoState extends State<Todo> {
+class _TodoState extends State<TodoPage> {
   final TextEditingController todoController = TextEditingController();
-  List<String> todos = [];
+  List<Todo> todos = [];
+  late bool? _isButtonAddDisabled = true;
+  late bool? _isButtonRemoveAllDisabled = true;
+
+  late int? indexTask = 0;
 
   void addTodo(String text) {
+    if (text.isNotEmpty) {
+      setState(() {
+        String text = todoController.text;
+        Todo newTodo = Todo(title: text, dateTime: DateTime.now());
+        todos.add(newTodo);
+        todoController.clear();
+        _isButtonAddDisabled = true;
+        verificaLista();
+        HapticFeedback.heavyImpact();
+        FocusManager.instance.primaryFocus?.unfocus();
+      });
+    }
+  }
+
+  void verificaLista() {
+    setState(() {
+      _isButtonRemoveAllDisabled = todos.isEmpty;
+    });
+  }
+
+  void desfazerExcluir(Todo todo) {
+    setState(() {
+      verificaLista();
+      todos.insert(indexTask!, todo);
+    });
+  }
+
+  void desfazerTodos(List<Todo> todoAux) {
+    setState(() {
+      print(todoAux);
+      todos.addAll(todoAux);
+      verificaLista();
+    });
+  }
+
+  void onChanged(String text) {
     setState(() {
       String text = todoController.text;
-      todos.add(text);
-      todoController.clear();
+      _isButtonAddDisabled = (text.isEmpty);
     });
+  }
+
+  void limparTodos() {
+    setState(() {
+      List<Todo> todoAux = [];
+
+      todoAux.addAll(todos);
+
+      todos.clear();
+
+      Navigator.of(context).pop();
+
+      HapticFeedback.heavyImpact();
+
+      ScaffoldMessenger.of(context).clearSnackBars();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Tarefas removidas com sucesso!'),
+          action: SnackBarAction(
+            label: 'Desfazer',
+            textColor: Colors.orange,
+            onPressed: () {
+              desfazerTodos(todoAux);
+            },
+          ),
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    });
+    verificaLista();
+  }
+
+  void onDelete(Todo todo) {
+    setState(() {
+      indexTask = todos.indexOf(todo);
+      todos.remove(todo);
+      HapticFeedback.heavyImpact();
+      verificaLista();
+
+      ScaffoldMessenger.of(context).clearSnackBars();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Tarefa ${todo.title} deletada com sucesso'),
+          action: SnackBarAction(
+            label: 'Desfazer',
+            textColor: Colors.orange,
+            onPressed: () {
+              desfazerExcluir(todo);
+            },
+          ),
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    });
+  }
+
+  void showDeleteAllConfirmationDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Limpar tudo?'),
+        content: const Text('Tem certeza que deseja limpar todas as tarefas?'),
+        actions: <Widget>[
+          OutlinedButton(
+            onPressed: () => Navigator.pop(context, 'Cancelar'),
+            style: OutlinedButton.styleFrom(
+              side: const BorderSide(
+                width: 0.4,
+                color: Color.fromARGB(136, 255, 153, 0),
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                Icon(Icons.cancel),
+                SizedBox(width: 5),
+                Text('Cancelar'),
+              ],
+            ),
+          ),
+          OutlinedButton(
+            onPressed: () => limparTodos(),
+            style: OutlinedButton.styleFrom(
+              backgroundColor: Colors.red.withOpacity(0.5),
+              side: const BorderSide(
+                width: 0,
+                color: Colors.red,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                Icon(
+                  Icons.delete,
+                  color: Colors.white,
+                ),
+                SizedBox(width: 5),
+                Text(
+                  'Ok',
+                  style: TextStyle(color: Colors.white),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -35,20 +183,20 @@ class _TodoState extends State<Todo> {
                 ),
               ),
               OutlinedButton(
-                onPressed: () {
-                  setState(() {
-                    todos.clear();
-                  });
-                },
+                onPressed: !_isButtonRemoveAllDisabled!
+                    ? () => showDeleteAllConfirmationDialog()
+                    : null,
                 style: OutlinedButton.styleFrom(
                   primary: Colors.orange,
                   fixedSize: Size(65, 65),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  side: const BorderSide(
+                  side: BorderSide(
                     width: 0.4,
-                    color: Colors.orangeAccent,
+                    color: !_isButtonRemoveAllDisabled!
+                        ? Colors.orangeAccent
+                        : Colors.grey,
                   ),
                 ),
                 child: const Icon(
@@ -68,7 +216,8 @@ class _TodoState extends State<Todo> {
                 shrinkWrap: true,
                 itemBuilder: (context, index) {
                   return TodoListItem(
-                    tittle: todos[index],
+                    todo: todos[index],
+                    onDelete: onDelete,
                   );
                 },
               ),
@@ -81,29 +230,33 @@ class _TodoState extends State<Todo> {
               Expanded(
                 child: TextField(
                   controller: todoController,
+                  autocorrect: true,
+                  keyboardType: TextInputType.text,
+                  textCapitalization: TextCapitalization.sentences,
                   decoration: const InputDecoration(
                     border: OutlineInputBorder(),
                     labelText: 'Tarefa',
                     hintText: 'Informe a tarefa',
                   ),
                   onSubmitted: addTodo,
+                  onChanged: onChanged,
                 ),
               ),
               const SizedBox(width: 8),
               ElevatedButton(
-                onPressed: () {
-                  addTodo(todoController.text);
-                },
+                onPressed: !_isButtonAddDisabled!
+                    ? () => addTodo(todoController.text)
+                    : null,
                 style: ElevatedButton.styleFrom(
                   primary: Colors.orange,
-                  fixedSize: Size(62, 62),
+                  fixedSize: const Size(65, 65),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
                   ),
                 ),
                 child: const Icon(
-                  Icons.add,
-                  size: 30,
+                  Icons.add_task_outlined,
+                  size: 25,
                 ),
               ),
             ],
