@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:todo/pages/autenticaded/todo/widgets/todo_list_item.dart';
+import 'package:todo/repositories/todo_repository.dart';
 import '../../../../models/todo.dart';
 import 'package:flutter/services.dart';
 
@@ -12,11 +13,25 @@ class TodoPage extends StatefulWidget {
 
 class _TodoState extends State<TodoPage> {
   final TextEditingController todoController = TextEditingController();
+  final TodoRepository todoRepository = TodoRepository();
+
   List<Todo> todos = [];
   late bool? _isButtonAddDisabled = true;
   late bool? _isButtonRemoveAllDisabled = true;
 
   late int? indexTask = 0;
+
+  @override
+  void initState() {
+    super.initState();
+
+    setState(() {
+      todoRepository.getTodoList().then((value) {
+        todos = value;
+        verificaLista();
+      });
+    });
+  }
 
   void addTodo(String text) {
     if (text.isNotEmpty) {
@@ -29,6 +44,7 @@ class _TodoState extends State<TodoPage> {
         verificaLista();
         HapticFeedback.heavyImpact();
         FocusManager.instance.primaryFocus?.unfocus();
+        todoRepository.saveTodoList(todos);
       });
     }
   }
@@ -39,17 +55,20 @@ class _TodoState extends State<TodoPage> {
     });
   }
 
+  void getTodoLists() {}
+
   void desfazerExcluir(Todo todo) {
     setState(() {
       verificaLista();
       todos.insert(indexTask!, todo);
+      todoRepository.saveTodoList(todos);
     });
   }
 
   void desfazerTodos(List<Todo> todoAux) {
     setState(() {
-      print(todoAux);
       todos.addAll(todoAux);
+      todoRepository.saveTodoList(todos);
       verificaLista();
     });
   }
@@ -68,6 +87,7 @@ class _TodoState extends State<TodoPage> {
       todoAux.addAll(todos);
 
       todos.clear();
+      todoRepository.saveTodoList(todos);
 
       Navigator.of(context).pop();
 
@@ -95,6 +115,7 @@ class _TodoState extends State<TodoPage> {
     setState(() {
       indexTask = todos.indexOf(todo);
       todos.remove(todo);
+      todoRepository.saveTodoList(todos);
       HapticFeedback.heavyImpact();
       verificaLista();
 
@@ -174,52 +195,66 @@ class _TodoState extends State<TodoPage> {
       padding: const EdgeInsets.symmetric(horizontal: 10),
       child: Column(
         mainAxisSize: MainAxisSize.max,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Você possui ${todos.length} tarefas pendentes',
+          if (!_isButtonRemoveAllDisabled!)
+            Row(
+              children: [
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(20, 0, 0, 0),
                 ),
-              ),
-              OutlinedButton(
-                onPressed: !_isButtonRemoveAllDisabled!
-                    ? () => showDeleteAllConfirmationDialog()
-                    : null,
-                style: OutlinedButton.styleFrom(
-                  primary: Colors.orange,
-                  fixedSize: Size(65, 65),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  side: BorderSide(
-                    width: 0.4,
-                    color: !_isButtonRemoveAllDisabled!
-                        ? Colors.orangeAccent
-                        : Colors.grey,
+                Expanded(
+                  child: Text(
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w400,
+                    ),
+                    'Você possui ${todos.length} tarefas pendentes',
                   ),
                 ),
-                child: const Icon(
-                  Icons.clear_all,
-                  size: 30,
+                OutlinedButton(
+                  onPressed: !_isButtonRemoveAllDisabled!
+                      ? () => showDeleteAllConfirmationDialog()
+                      : null,
+                  style: OutlinedButton.styleFrom(
+                    primary: Colors.orange,
+                    fixedSize: const Size(65, 65),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    side: BorderSide(
+                      width: 0.4,
+                      color: !_isButtonRemoveAllDisabled!
+                          ? Colors.orangeAccent
+                          : Colors.grey,
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.clear_all,
+                    size: 30,
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
           const SizedBox(
             height: 10,
           ),
           Flexible(
             child: Scrollbar(
-              child: ListView.builder(
-                itemCount: todos.length,
-                shrinkWrap: true,
-                itemBuilder: (context, index) {
-                  return TodoListItem(
-                    todo: todos[index],
-                    onDelete: onDelete,
-                  );
-                },
+              child: Column(
+                children: [
+                  if (!_isButtonRemoveAllDisabled!)
+                    ListView.builder(
+                      itemCount: todos.length,
+                      shrinkWrap: true,
+                      itemBuilder: (context, index) {
+                        return TodoListItem(
+                          todo: todos[index],
+                          onDelete: onDelete,
+                        );
+                      },
+                    ),
+                ],
               ),
             ),
           ),
@@ -236,7 +271,7 @@ class _TodoState extends State<TodoPage> {
                   decoration: const InputDecoration(
                     border: OutlineInputBorder(),
                     labelText: 'Tarefa',
-                    hintText: 'Informe a tarefa',
+                    hintText: 'Ex.: Correr na práia',
                   ),
                   onSubmitted: addTodo,
                   onChanged: onChanged,
